@@ -1001,17 +1001,11 @@ function checkAnswers() {
 
 // Clear the crossword display
 function clearCrossword() {
-    document.getElementById('crosswordContainer').style.display = 'none';
-    document.getElementById('loading').style.display = 'none';
-
-    // Remove keyboard event listener
-    document.removeEventListener('keydown', handleKeyPress);
-
-    // Reset global variables
-    currentCrossword = null;
-    selectedCell = null;
-    currentDirection = 'horizontal';
-    userAnswers = [];
+    // Remove seed from URL and reload page (same as clicking the title)
+    const params = new URLSearchParams(window.location.search);
+    params.delete('seed');
+    const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+    window.location.href = newUrl;
 }
 
 // Function to get n random words from the text file
@@ -1110,3 +1104,5 @@ function showSolution(number, direction) {
         }
     }
 }
+
+window.generateRandomCrossword = generateRandomCrossword;
