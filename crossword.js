@@ -1,4 +1,4 @@
-// Crossword Puzzle Generator
+// Crossword Puzzle Generator.
 // Function that takes a list of strings and generates a crossword puzzle
 
 class CrosswordGenerator {
