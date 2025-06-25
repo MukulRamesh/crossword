@@ -397,10 +397,158 @@ function generateCrossword() {
     }
 }
 
-// New function to generate crossword with random words from file
-async function generateRandomCrossword() {
+// --- Seeded RNG utility ---
+function mulberry32(seed) {
+    return function() {
+        let t = seed += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+}
+
+// Generate a random 32-bit integer seed
+function generateSeed() {
+    return Math.floor(Math.random() * 0xFFFFFFFF);
+}
+
+// Store the last used seed (hidden from user, but accessible for reproducibility)
+let lastCrosswordSeed = null;
+
+// Utility: get seed from URL (now supports string seeds)
+function getSeedFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const seed = params.get('seed');
+    if (!seed) return null;
+    // If it's a daily seed, return as string
+    if (seed.startsWith('DAILY-')) return seed;
+    // Otherwise, try to parse as int
+    const num = parseInt(seed, 10);
+    return isNaN(num) ? seed : num;
+}
+
+// Utility: set seed in URL (supports string seeds)
+function setSeedInURL(seed) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('seed', seed);
+    const newUrl = window.location.pathname + '?' + params.toString();
+    window.history.replaceState({}, '', newUrl);
+}
+
+// Show/hide shared message and generate button
+function updateSharedUI(isShared) {
+    const msg = document.getElementById('sharedCrosswordMsg');
+    const btn = document.querySelector('button[onclick="generateRandomCrossword()"]');
+    const dailyBtn = document.getElementById('dailyCrosswordBtn');
+    // Determine if the current seed is a daily seed
+    let seed = getSeedFromURL();
+    let isDaily = typeof seed === 'string' && seed.startsWith('DAILY-');
+    if (msg) {
+        if (isShared) {
+            if (isDaily) {
+                // Extract date from seed
+                const dateStr = seed.substring(6); // after 'DAILY-'
+                msg.textContent = `Showing Daily Crossword for ${dateStr}`;
+            } else {
+                msg.textContent = 'Showing Shared Crossword';
+            }
+        } else {
+            msg.textContent = '';
+        }
+    }
+    if (msg && btn) {
+        if (isShared) {
+            msg.style.display = '';
+            btn.style.display = 'none';
+            if (dailyBtn) dailyBtn.style.display = 'none';
+        } else {
+            msg.style.display = 'none';
+            btn.style.display = '';
+            if (dailyBtn) dailyBtn.style.display = '';
+        }
+    }
+}
+
+// Main entry: on page load, check for seed in URL
+window.addEventListener('DOMContentLoaded', () => {
+    const seed = getSeedFromURL();
+    if (seed) {
+        // Shared crossword: use seed, show message, hide button
+        updateSharedUI(true);
+        generateRandomCrossword(seed);
+    } else {
+        // Not shared: show button, hide message
+        updateSharedUI(false);
+    }
+
+    // Make the title clickable to clear the seed from the URL
+    const titleLink = document.getElementById('titleLink');
+    if (titleLink) {
+        titleLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            // Remove seed from URL and reload page
+            const params = new URLSearchParams(window.location.search);
+            params.delete('seed');
+            const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+            window.location.href = newUrl;
+        });
+    }
+});
+
+// Utility: get a daily seed as a string 'DAILY-YYYY-MM-DD'
+function getDailySeed() {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `DAILY-${yyyy}-${mm}-${dd}`;
+}
+
+// Convert a string seed (including 'DAILY-YYYY-MM-DD') to a numeric seed for RNG
+function stringToSeed(str) {
+    // Simple hash function for string to int
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    }
+    return Math.abs(hash) % 4294967296; // 32-bit unsigned
+}
+
+function generateDailyCrossword() {
+    const dailySeed = getDailySeed();
+    setSeedInURL(dailySeed);
+    updateSharedUI(true);
+    generateRandomCrossword(dailySeed);
+}
+
+// Modified generateRandomCrossword to accept string or numeric seed
+async function generateRandomCrossword(seed) {
     const maxSize = 20; // Default value
     const minWordLength = 3; // Default value
+
+    // Use provided seed or generate a new one
+    let displaySeed = seed;
+    let rngSeed;
+    if (typeof seed === 'undefined' || seed === null) {
+        rngSeed = generateSeed();
+        displaySeed = rngSeed;
+        setSeedInURL(displaySeed);
+        updateSharedUI(false);
+    } else if (typeof seed === 'string' && seed.startsWith('DAILY-')) {
+        rngSeed = stringToSeed(seed);
+        setSeedInURL(seed);
+        updateSharedUI(true);
+    } else if (typeof seed === 'string') {
+        rngSeed = stringToSeed(seed);
+        setSeedInURL(seed);
+        updateSharedUI(true);
+    } else {
+        rngSeed = seed;
+        setSeedInURL(seed);
+        updateSharedUI(true);
+    }
+    lastCrosswordSeed = displaySeed;
+    const rng = mulberry32(rngSeed);
 
     // Show loading indicator
     const loadingElement = document.getElementById('loading');
@@ -409,8 +557,8 @@ async function generateRandomCrossword() {
     containerElement.style.display = 'none';
 
     try {
-        // Get 20 random words and clues from the file
-        const wordCluePairs = await getRandomWordsFromFile(20);
+        // Get 20 random words and clues from the file, using the seeded RNG
+        const wordCluePairs = await getRandomWordsFromFile(20, rng);
 
         // Extract just the words for the crossword generator
         const wordList = wordCluePairs.map(pair => pair.word);
@@ -478,10 +626,7 @@ function displayCrossword(result) {
             if (cellNumber) {
                 gridHTML += `<span class="number">${cellNumber}</span>`;
             }
-            if (cell !== '') {
-                // Don't show the original letters - let user fill them in
-                // gridHTML += `<span class="letter">${cell}</span>`;
-            }
+            gridHTML += `<span class="letter"></span>`;
             gridHTML += '</div>';
         }
         gridHTML += '</div>';
@@ -671,8 +816,6 @@ function handleKeyPress(event) {
         const letterSpan = selectedCell.querySelector('.letter');
         if (letterSpan) {
             letterSpan.textContent = key;
-        } else {
-            selectedCell.innerHTML += `<span class="letter">${key}</span>`;
         }
 
         // Store user answer
@@ -690,7 +833,7 @@ function handleKeyPress(event) {
         // Clear the cell
         const letterSpan = selectedCell.querySelector('.letter');
         if (letterSpan) {
-            letterSpan.remove();
+            letterSpan.textContent = '';
         }
 
         // Store user answer
@@ -871,13 +1014,8 @@ function clearCrossword() {
     userAnswers = [];
 }
 
-// Export the main function for external use
-function generateCrosswordFromList(wordList, maxSize = 20, minWordLength = 3) {
-    return crosswordGenerator.generateCrossword(wordList, maxSize, minWordLength);
-}
-
 // Function to get n random words from the text file
-async function getRandomWordsFromFile(n) {
+async function getRandomWordsFromFile(n, rng) {
     try {
         // Fetch the text file
         const response = await fetch('XwhenYwalksin.txt');
@@ -897,12 +1035,12 @@ async function getRandomWordsFromFile(n) {
             throw new Error(`Requested ${n} words but file only contains ${lines.length} lines`);
         }
 
-        // Select n random lines
+        // Select n random lines using the seeded RNG
         const selectedLines = [];
         const lineIndices = Array.from({length: lines.length}, (_, i) => i);
 
         for (let i = 0; i < n; i++) {
-            const randomIndex = Math.floor(Math.random() * lineIndices.length);
+            const randomIndex = Math.floor((rng ? rng() : Math.random()) * lineIndices.length);
             const lineIndex = lineIndices.splice(randomIndex, 1)[0];
             selectedLines.push(lines[lineIndex].trim());
         }
@@ -928,70 +1066,6 @@ async function getRandomWordsFromFile(n) {
     }
 }
 
-// Alternative synchronous version using XMLHttpRequest (for older browsers)
-function getRandomWordsFromFileSync(n) {
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', 'XwhenYwalksin.txt', true);
-
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                try {
-                    const text = xhr.responseText;
-                    const lines = text.split('\n').filter(line => line.trim() !== '');
-
-                    // Validate input
-                    if (n <= 0) {
-                        reject(new Error('n must be a positive integer'));
-                        return;
-                    }
-
-                    if (n > lines.length) {
-                        reject(new Error(`Requested ${n} words but file only contains ${lines.length} lines`));
-                        return;
-                    }
-
-                    // Select n random lines
-                    const selectedLines = [];
-                    const lineIndices = Array.from({length: lines.length}, (_, i) => i);
-
-                    for (let i = 0; i < n; i++) {
-                        const randomIndex = Math.floor(Math.random() * lineIndices.length);
-                        const lineIndex = lineIndices.splice(randomIndex, 1)[0];
-                        selectedLines.push(lines[lineIndex]);
-                    }
-
-                    // Extract words and clues
-                    const wordCluePairs = selectedLines.map(line => {
-                        const match = line.match(/^\((.*?)\) -> .*? -> (.*?)$/);
-                        if (match) {
-                            return {
-                                word: match[1],
-                                clue: match[2]
-                            };
-                        } else {
-                            throw new Error(`Invalid line format: ${line}`);
-                        }
-                    });
-
-                    resolve(wordCluePairs);
-
-                } catch (error) {
-                    reject(error);
-                }
-            } else {
-                reject(new Error(`Failed to fetch file: ${xhr.status} ${xhr.statusText}`));
-            }
-        };
-
-        xhr.onerror = function() {
-            reject(new Error('Network error occurred'));
-        };
-
-        xhr.send();
-    });
-}
-
 // Show solution for a specific word
 function showSolution(number, direction) {
     if (!currentCrossword) return;
@@ -1014,8 +1088,6 @@ function showSolution(number, direction) {
                 const letterSpan = cell.querySelector('.letter');
                 if (letterSpan) {
                     letterSpan.textContent = word.word[i];
-                } else {
-                    cell.innerHTML += `<span class="letter">${word.word[i]}</span>`;
                 }
 
                 // Add solution highlighting
