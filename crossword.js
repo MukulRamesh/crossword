@@ -417,6 +417,83 @@ let selectedCell = null;
 let currentDirection = 'horizontal';
 let userAnswers = [];
 
+// --- LocalStorage utilities for saving/restoring progress ---
+function getProgressKey(seed) {
+    return `crossword_progress_${seed}`;
+}
+
+function saveProgress(seed) {
+    if (!currentCrossword || !seed) return;
+
+    const progressData = {
+        userAnswers: userAnswers,
+        timestamp: Date.now(),
+        crosswordData: {
+            grid: currentCrossword.grid,
+            placedWords: currentCrossword.placedWords,
+            stats: currentCrossword.stats
+        }
+    };
+
+    try {
+        localStorage.setItem(getProgressKey(seed), JSON.stringify(progressData));
+    } catch (error) {
+        console.warn('Failed to save progress to localStorage:', error);
+    }
+}
+
+function loadProgress(seed) {
+    if (!seed) return null;
+
+    try {
+        const savedData = localStorage.getItem(getProgressKey(seed));
+        if (savedData) {
+            const progressData = JSON.parse(savedData);
+
+            // Check if the saved data is for the same crossword (same grid)
+            if (progressData.crosswordData &&
+                JSON.stringify(progressData.crosswordData.grid) === JSON.stringify(currentCrossword.grid)) {
+                return progressData;
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to load progress from localStorage:', error);
+    }
+
+    return null;
+}
+
+function clearProgress(seed) {
+    if (!seed) return;
+
+    try {
+        localStorage.removeItem(getProgressKey(seed));
+    } catch (error) {
+        console.warn('Failed to clear progress from localStorage:', error);
+    }
+}
+
+// Auto-save progress periodically and on user input
+function setupAutoSave(seed) {
+    // Save progress every 5 seconds
+    const autoSaveInterval = setInterval(() => {
+        if (currentCrossword && seed) {
+            saveProgress(seed);
+            console.log('Progress saved');
+        }
+    }, 5000);
+
+    // Save progress on page unload
+    window.addEventListener('beforeunload', () => {
+        if (currentCrossword && seed) {
+            saveProgress(seed);
+        }
+    });
+
+    // Return the interval ID so it can be cleared if needed
+    return autoSaveInterval;
+}
+
 // Main function called from HTML
 function generateCrossword() {
     const wordListText = document.getElementById('wordList').value;
@@ -618,7 +695,14 @@ async function generateRandomCrossword(seed) {
 
         // Hide loading and display crossword
         loadingElement.style.display = 'none';
-        displayCrossword(result);
+
+        // Initialize currentCrossword first, then load saved progress
+        currentCrossword = result;
+        const savedProgress = loadProgress(displaySeed);
+        displayCrossword(result, savedProgress);
+
+        // Set up auto-save for this seed
+        setupAutoSave(displaySeed);
 
     } catch (error) {
         loadingElement.style.display = 'none';
@@ -627,13 +711,13 @@ async function generateRandomCrossword(seed) {
 }
 
 // Display the crossword puzzle
-function displayCrossword(result) {
+function displayCrossword(result, savedProgress = null) {
     const container = document.getElementById('crosswordContainer');
     const gridElement = document.getElementById('crosswordGrid');
     const cluesElement = document.getElementById('cluesSection');
 
     // Store current crossword data globally
-    currentCrossword = result;
+    // currentCrossword is already set in generateRandomCrossword
     selectedCell = null;
     currentDirection = 'horizontal';
 
@@ -644,6 +728,21 @@ function displayCrossword(result) {
         for (let col = 0; col < result.grid[row].length; col++) {
             userAnswers[row][col] = '';
         }
+    }
+
+    // Restore saved progress if available
+    if (savedProgress && savedProgress.userAnswers) {
+        // Restore user answers
+        for (let row = 0; row < Math.min(savedProgress.userAnswers.length, result.grid.length); row++) {
+            for (let col = 0; col < Math.min(savedProgress.userAnswers[row].length, result.grid[row].length); col++) {
+                if (savedProgress.userAnswers[row][col]) {
+                    userAnswers[row][col] = savedProgress.userAnswers[row][col];
+                }
+            }
+        }
+
+        // Show notification that progress was restored
+        showProgressRestoredNotification();
     }
 
     // Show container
@@ -668,12 +767,13 @@ function displayCrossword(result) {
             const cell = result.grid[row][col];
             const cellClass = cell === '' ? 'black' : 'editable';
             const cellNumber = getCellNumber(result.placedWords, row, col);
+            const savedLetter = userAnswers[row][col] || '';
 
             gridHTML += `<div class="crossword-cell ${cellClass}" data-row="${row}" data-col="${col}">`;
             if (cellNumber) {
                 gridHTML += `<span class="number">${cellNumber}</span>`;
             }
-            gridHTML += `<span class="letter"></span>`;
+            gridHTML += `<span class="letter">${savedLetter}</span>`;
             gridHTML += '</div>';
         }
         gridHTML += '</div>';
@@ -753,6 +853,11 @@ function displayCrossword(result) {
 
     // Add keyboard event listener
     document.addEventListener('keydown', handleKeyPress);
+
+    // Restore solution highlighting if saved progress exists
+    if (savedProgress) {
+        restoreSolutionHighlighting();
+    }
 }
 
 // Select a cell in the grid
@@ -922,6 +1027,12 @@ function handleKeyPress(event) {
         const col = parseInt(selectedCell.dataset.col);
         userAnswers[row][col] = key;
 
+        // Save progress immediately
+        const seed = getSeedFromURL();
+        if (seed) {
+            saveProgress(seed);
+        }
+
         // Move to next cell
         moveToNextCell();
     }
@@ -939,6 +1050,12 @@ function handleKeyPress(event) {
         const row = parseInt(selectedCell.dataset.row);
         const col = parseInt(selectedCell.dataset.col);
         userAnswers[row][col] = '';
+
+        // Save progress immediately
+        const seed = getSeedFromURL();
+        if (seed) {
+            saveProgress(seed);
+        }
 
         // Move to previous cell
         moveToPreviousCell();
@@ -1134,6 +1251,12 @@ function updateProgressBar(correctCount, totalCells, percentage) {
 
 // Clear the crossword display
 function clearCrossword() {
+    // Clear saved progress for current seed
+    const seed = getSeedFromURL();
+    if (seed) {
+        clearProgress(seed);
+    }
+
     // Remove seed from URL and reload page (same as clicking the title)
     const params = new URLSearchParams(window.location.search);
     params.delete('seed');
@@ -1235,7 +1358,82 @@ function showSolution(number, direction) {
                 button.style.opacity = '0.6';
             }
         }
+
+        // Save progress immediately
+        const seed = getSeedFromURL();
+        if (seed) {
+            saveProgress(seed);
+        }
     }
 }
 
+// Restore solution highlighting from saved progress
+function restoreSolutionHighlighting() {
+    if (!currentCrossword) return;
+
+    // Check which words have been solved (all letters filled correctly)
+    for (const word of currentCrossword.placedWords) {
+        let isComplete = true;
+        const wordLength = word.word.length;
+
+        // Check if all letters in this word are filled correctly
+        for (let i = 0; i < wordLength; i++) {
+            const wordRow = word.direction === 'horizontal' ? word.row : word.row + i;
+            const wordCol = word.direction === 'horizontal' ? word.col + i : word.col;
+
+            const userLetter = userAnswers[wordRow][wordCol];
+            const correctLetter = word.word[i];
+
+            if (userLetter !== correctLetter) {
+                isComplete = false;
+                break;
+            }
+        }
+
+        // If word is complete, add solution highlighting
+        if (isComplete) {
+            for (let i = 0; i < wordLength; i++) {
+                const wordRow = word.direction === 'horizontal' ? word.row : word.row + i;
+                const wordCol = word.direction === 'horizontal' ? word.col + i : word.col;
+
+                const cell = document.querySelector(`[data-row="${wordRow}"][data-col="${wordCol}"]`);
+                if (cell) {
+                    cell.classList.add('solution');
+                }
+            }
+
+            // Update the clue button to show it's been used
+            const clueItem = document.querySelector(`[data-number="${word.number}"][data-direction="${word.direction}"]`);
+            if (clueItem) {
+                const button = clueItem.querySelector('.show-solution-btn');
+                if (button) {
+                    button.textContent = '✓ Shown';
+                    button.disabled = true;
+                    button.style.opacity = '0.6';
+                }
+            }
+        }
+    }
+}
+
+// Show notification that progress was restored
+function showProgressRestoredNotification() {
+    const notification = document.createElement('div');
+    notification.className = 'progress-restored-notification';
+    notification.textContent = 'Previous progress restored!';
+
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+        // Add sliding-out class to trigger the slide animation
+        notification.classList.add('sliding-out');
+
+        // Remove the element after the animation completes
+        setTimeout(() => {
+            notification.remove();
+        }, 300); // Match the transition duration
+    }, 3000);
+}
+
+window.generateRandomCrossword = generateRandomCrossword;
 window.generateRandomCrossword = generateRandomCrossword;
