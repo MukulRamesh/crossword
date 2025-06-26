@@ -34,6 +34,9 @@ class CrosswordGenerator {
         // Place remaining words
         this.placeRemainingWords();
 
+        // Assign proper word numbers (words starting at same position get same number)
+        this.assignWordNumbers();
+
         // Trim grid to actual size
         this.trimGrid();
 
@@ -81,7 +84,7 @@ class CrosswordGenerator {
             row: center,
             col: startCol,
             direction: 'horizontal',
-            number: 1
+            number: 0
         });
 
         // Remove from unplaced words
@@ -292,7 +295,7 @@ class CrosswordGenerator {
                             row: wordStartRow,
                             col: wordStartCol,
                             direction: direction,
-                            number: this.placedWords.length + 1
+                            number: 0 // Will be assigned properly by assignWordNumbers()
                         });
 
                         return;
@@ -341,6 +344,44 @@ class CrosswordGenerator {
         for (const word of this.placedWords) {
             word.row -= minRow;
             word.col -= minCol;
+        }
+    }
+
+    // Assign proper word numbers (words starting at same position get same number)
+    assignWordNumbers() {
+        // Create a map of position -> words that start there
+        const positionMap = new Map();
+
+        for (const word of this.placedWords) {
+            const posKey = `${word.row},${word.col}`;
+            if (!positionMap.has(posKey)) {
+                positionMap.set(posKey, []);
+            }
+            positionMap.get(posKey).push(word);
+        }
+
+        // Assign numbers based on position order
+        let nextNumber = 1;
+        const usedNumbers = new Set();
+
+        // Sort positions by row, then by column for consistent numbering
+        const sortedPositions = Array.from(positionMap.keys()).sort((a, b) => {
+            const [rowA, colA] = a.split(',').map(Number);
+            const [rowB, colB] = b.split(',').map(Number);
+            if (rowA !== rowB) return rowA - rowB;
+            return colA - colB;
+        });
+
+        for (const posKey of sortedPositions) {
+            const wordsAtPosition = positionMap.get(posKey);
+
+            // All words at this position get the same number
+            for (const word of wordsAtPosition) {
+                word.number = nextNumber;
+            }
+
+            usedNumbers.add(nextNumber);
+            nextNumber++;
         }
     }
 
@@ -471,6 +512,9 @@ function updateSharedUI(isShared) {
 
 // Main entry: on page load, check for seed in URL
 window.addEventListener('DOMContentLoaded', () => {
+    // Hide progress section initially
+    showProgressSection(false);
+
     const seed = getSeedFromURL();
     if (seed) {
         // Shared crossword: use seed, show message, hide button
@@ -605,6 +649,9 @@ function displayCrossword(result) {
     // Show container
     container.style.display = 'block';
 
+    // Hide progress section for new crossword
+    showProgressSection(false);
+
     // Log stats to console
     const stats = result.stats;
     console.log('Crossword Stats:', {
@@ -719,8 +766,58 @@ function selectCell(cell) {
     selectedCell = cell;
     cell.classList.add('selected');
 
+    // Automatically infer the correct direction for this cell
+    inferDirectionForCell(cell);
+
     // Highlight the word containing this cell
     highlightWord(cell);
+}
+
+// Automatically infer the correct direction for a cell
+function inferDirectionForCell(cell) {
+    const row = parseInt(cell.dataset.row);
+    const col = parseInt(cell.dataset.col);
+
+    // Find all words that contain this cell
+    const containingWords = currentCrossword.placedWords.filter(word => {
+        const wordLength = word.word.length;
+        for (let i = 0; i < wordLength; i++) {
+            const wordRow = word.direction === 'horizontal' ? word.row : word.row + i;
+            const wordCol = word.direction === 'horizontal' ? word.col + i : word.col;
+            if (wordRow === row && wordCol === col) {
+                return true;
+            }
+        }
+        return false;
+    });
+
+    if (containingWords.length === 0) {
+        return; // No words contain this cell
+    }
+
+    // If this cell is the start of a word (has a number), prefer that word's direction
+    const cellNumber = getCellNumber(currentCrossword.placedWords, row, col);
+    if (cellNumber) {
+        const startingWord = containingWords.find(word => word.number === cellNumber);
+        if (startingWord) {
+            currentDirection = startingWord.direction;
+            return;
+        }
+    }
+
+    // If multiple words contain this cell, prefer the current direction if it's valid
+    const currentDirectionWord = containingWords.find(word => word.direction === currentDirection);
+    if (currentDirectionWord) {
+        return; // Keep current direction
+    }
+
+    // Otherwise, prefer horizontal over vertical (common crossword convention)
+    const horizontalWord = containingWords.find(word => word.direction === 'horizontal');
+    if (horizontalWord) {
+        currentDirection = 'horizontal';
+    } else {
+        currentDirection = 'vertical';
+    }
 }
 
 // Select a clue
@@ -987,15 +1084,49 @@ function checkAnswers() {
 
     const percentage = Math.round((correctCount / totalCells) * 100);
 
-    // Show result
-    const resultMessage = `You got ${correctCount} out of ${totalCells} letters correct (${percentage}%)`;
+    // Update progress bar
+    updateProgressBar(correctCount, totalCells, percentage);
+}
 
-    if (percentage === 100) {
-        alert('🎉 Congratulations! You completed the crossword perfectly!');
-    } else if (percentage >= 80) {
-        alert(`Great job! ${resultMessage}`);
-    } else {
-        alert(resultMessage);
+// Function to show/hide progress section
+function showProgressSection(show) {
+    const progressSection = document.getElementById('progressSection');
+    if (progressSection) {
+        progressSection.style.display = show ? 'block' : 'none';
+    }
+}
+
+// Function to update progress bar
+function updateProgressBar(correctCount, totalCells, percentage) {
+    const progressSection = document.getElementById('progressSection');
+    const progressText = document.getElementById('progressText');
+    const progressBar = document.getElementById('progressBar');
+    const progressDetails = document.getElementById('progressDetails');
+
+    if (progressSection && progressText && progressBar && progressDetails) {
+        // Show the progress section
+        progressSection.style.display = 'block';
+
+        // Update progress text
+        progressText.textContent = `Progress: ${percentage}%`;
+
+        // Update progress bar width
+        progressBar.style.width = `${percentage}%`;
+
+        // Update progress details
+        progressDetails.textContent = `${correctCount} out of ${totalCells} letters correct`;
+
+        // Change color based on performance
+        if (percentage === 100) {
+            progressBar.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+            progressText.textContent = '🎉 Perfect! 100% Complete!';
+        } else if (percentage >= 80) {
+            progressBar.style.background = 'linear-gradient(135deg, #ffc107 0%, #ff9800 100%)';
+        } else if (percentage >= 60) {
+            progressBar.style.background = 'linear-gradient(135deg, #fd7e14 0%, #e83e8c 100%)';
+        } else {
+            progressBar.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+        }
     }
 }
 

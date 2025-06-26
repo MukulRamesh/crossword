@@ -46,6 +46,18 @@
 
             <div id="sharedCrosswordMsg" style="display:none; text-align:center; margin: 20px 0; color: #1976d2; font-weight: bold; font-size: 1.2em;">Showing Shared Crossword</div>
 
+            <div id="progressSection" style="display:none; text-align:center; margin: 20px 0;">
+                <div style="margin-bottom: 10px;">
+                    <span id="progressText" style="font-weight: bold; color: #333;">Progress: 0%</span>
+                </div>
+                <div style="width: 100%; max-width: 400px; margin: 0 auto; background: #e0e0e0; border-radius: 10px; overflow: hidden;">
+                    <div id="progressBar" style="width: 0%; height: 20px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); transition: width 0.3s ease; border-radius: 10px;"></div>
+                </div>
+                <div style="margin-top: 8px;">
+                    <span id="progressDetails" style="color: #666; font-size: 0.9em;">0 out of 0 letters correct</span>
+                </div>
+            </div>
+
             <div class="crossword-container" id="crosswordContainer">
                 <div class="crossword-layout">
                     <div class="crossword-grid" id="crosswordGrid"></div>
