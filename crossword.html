@@ -10,9 +10,7 @@
     <div class="container">
         <div class="header">
             <h1><a href="#" id="titleLink" style="color:inherit; text-decoration:none; cursor:pointer;">Antonym Crossword Generator</a></h1>
-            <p>Each word in the crossword can be split into sub-words. Each clue is the literal antonyms of those sub-words.</p>
-            <br>
-            <p1>By Mukul Ramesh</p1>
+            <h3><a href="../../frontpage/home.html" style="color:inherit; text-decoration:underline;">By Mukul Ramesh</a></h3>
         </div>
 
         <div class="content">
@@ -25,12 +23,12 @@
                         <input type="date" id="calendarPicker" max="" style="font-size:16px; padding:4px 8px; border-radius:6px; border:1px solid #ccc; outline:2px solid #4facfe; width:auto; min-width:120px;" />
                     </div>
                     <button onclick="clearCrossword()">Clear</button>
-                    <button onclick="checkAnswers()" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">Check Answers</button>
                 </div>
 
                 <div class="instructions" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: left;">
                     <h4 style="margin-bottom: 10px; color: #333;">How to Play:</h4>
                     <ul style="list-style-type: none; padding: 0;">
+                        <li style="margin-bottom: 5px;">• <strong>Each word in the crossword can be split into sub-words. Each clue is the literal antonyms of those sub-words.</strong></li>
                         <li style="margin-bottom: 5px;">• <strong>Click</strong> on any cell or clue to select it</li>
                         <li style="margin-bottom: 5px;">• <strong>Type letters</strong> to fill in answers</li>
                         <li style="margin-bottom: 5px;">• <strong>Arrow keys</strong> to navigate between cells</li>
@@ -59,6 +57,9 @@
             </div>
 
             <div class="crossword-container" id="crosswordContainer">
+                <div style="text-align: center; margin-top: 20px;">
+                    <button onclick="checkAnswers()" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 12px 24px; font-size: 16px; border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: bold;">Check Answers</button>
+                </div>
                 <div class="crossword-layout">
                     <div class="crossword-grid" id="crosswordGrid"></div>
                     <div class="clues-section" id="cluesSection"></div>

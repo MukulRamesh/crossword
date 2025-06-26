@@ -683,7 +683,7 @@ function displayCrossword(result) {
     // Add click handlers to cells
     const cells = gridElement.querySelectorAll('.crossword-cell.editable');
     cells.forEach(cell => {
-        cell.addEventListener('click', () => selectCell(cell));
+        cell.addEventListener('click', () => selectCell(cell, true));
     });
 
     // Generate clues
@@ -756,7 +756,7 @@ function displayCrossword(result) {
 }
 
 // Select a cell in the grid
-function selectCell(cell) {
+function selectCell(cell, inferDirection = false) {
     // Remove previous selection
     if (selectedCell) {
         selectedCell.classList.remove('selected');
@@ -766,8 +766,10 @@ function selectCell(cell) {
     selectedCell = cell;
     cell.classList.add('selected');
 
-    // Automatically infer the correct direction for this cell
-    inferDirectionForCell(cell);
+    // Only infer direction if requested (e.g., on user click)
+    if (inferDirection) {
+        inferDirectionForCell(cell);
+    }
 
     // Highlight the word containing this cell
     highlightWord(cell);
@@ -839,7 +841,7 @@ function selectClue(clueItem) {
         // Select the first cell of the word
         const firstCell = document.querySelector(`[data-row="${word.row}"][data-col="${word.col}"]`);
         if (firstCell) {
-            selectCell(firstCell);
+            selectCell(firstCell, true);
             currentDirection = direction;
             highlightWord(firstCell);
         }
