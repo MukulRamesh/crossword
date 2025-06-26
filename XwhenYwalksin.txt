@@ -80,8 +80,8 @@
 (burdensome) -> burden some -> unburden no
 (buttonlike) -> button like -> unbutton dislike
 (callable) -> call able -> put_option unable
-(candid) -> can did -> hire unmake
-(candied) -> can died -> hire be_born
+(candid) -> can did -> unable unmake
+(candied) -> can died -> unable be_born
 (cashable) -> cash able -> credit unable
 (castled) -> cast led -> keep_down follow
 (chainlike) -> chain like -> unchain dislike
@@ -135,7 +135,7 @@
 (defenseless) -> defense less -> offense more
 (disagreeable) -> disagree able -> agree unable
 (doable) -> do able -> unmake unable
-(dominican) -> do mini can -> unmake midi hire
+(dominican) -> do mini can -> unmake midi unable
 (downbound) -> down bound -> up unbind
 (downcast) -> down cast -> up keep_down
 (downlike) -> down like -> up dislike
@@ -630,9 +630,9 @@
 (buyback) -> buy back -> sell front
 (buyout) -> buy out -> sell in
 (callback) -> call back -> put_option front
-(cancan) -> can can -> hire hire
-(canis) -> can is -> hire differ
-(canon) -> can on -> hire off
+(cancan) -> can can -> unable unable
+(canis) -> can is -> unable differ
+(canon) -> can on -> unable off
 (cashbox) -> cash box -> credit unbox
 (castaway) -> cast away -> keep_down home
 (catcall) -> cat call -> keep_down put_option
